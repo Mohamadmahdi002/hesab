@@ -3,3 +3,4 @@ pandas
 streamlit
 speechrecognition
 pyaudio
+streamlit-audio-recorder
