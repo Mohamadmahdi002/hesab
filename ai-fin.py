@@ -185,6 +185,3 @@ if st.button("تبدیل به CSV"):
         )
     else:
         st.warning("لطفاً متن را وارد کنید.")
-
-    else:
-        st.warning("لطفاً متن را وارد کنید.")
