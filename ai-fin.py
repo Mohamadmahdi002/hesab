@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 from io import StringIO
 from datetime import datetime, timedelta
+import speech_recognition as sr
 
 # URL و توکن API
 url = 'https://api.one-api.ir/chatbot/v1/gpt3.5-turbo/'
@@ -56,22 +57,19 @@ st.title("")  # حذف عنوان پیشفرض Streamlit
 # استایل‌گذاری متن
 st.markdown("""
     <style>
-        .welcome-text {
-            font-size: 30px;
-            font-weight: bold;
-            color: #2980B9;
-            text-align: center;
-        }
-        .footer-text {
-            font-size: 15px;
-            text-align: center;
-            color: #34495E;
-            font-style: italic;
-        }
-        .message-box {
+        .record-btn {
+            background-color: #2980B9;
+            color: white;
+            padding: 15px 30px;
             border-radius: 10px;
-            padding: 10px;
-            background-color: #F0F3F4;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.3s ease;
+        }
+        .record-btn:hover {
+            background-color: #1D6F92;
         }
         .chat-history {
             margin-top: 20px;
@@ -85,18 +83,6 @@ st.markdown("""
         }
         .chat-message {
             margin-bottom: 20px;
-        }
-        .warning-text {
-            color: red;
-            font-size: 14px;
-            font-weight: bold;
-            text-align: center;
-        }
-        .header-text {
-            font-size: 40px;
-            font-weight: bold;
-            color: #2980B9;
-            text-align: center;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -131,69 +117,35 @@ if uploaded_file is not None:
         # ورودی پیام
         user_message = st.text_input("پیام خود را وارد کنید:", value=st.session_state.get('last_voice_input', ''))  # قرار دادن ورودی پیشفرض
 
-        # کد ضبط صدا با استفاده از HTML و JS
-        st.markdown("""
-        <script>
-        let audioStream;
-        let mediaRecorder;
-        let audioChunks = [];
-        let audioUrl;
-        
-        // Start recording
-        function startRecording() {
-            navigator.mediaDevices.getUserMedia({audio: true})
-            .then(stream => {
-                audioStream = stream;
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.ondataavailable = function(event) {
-                    audioChunks.push(event.data);
-                };
-                mediaRecorder.onstop = function() {
-                    let audioBlob = new Blob(audioChunks, {type: 'audio/wav'});
-                    audioUrl = URL.createObjectURL(audioBlob);
-                    let audio = new Audio(audioUrl);
-                    audio.play();
-                    stream.getTracks().forEach(track => track.stop());
-                };
-                mediaRecorder.start();
-            });
-        }
+        # دکمه ضبط صدا
+        if st.button("ضبط صدا", key="record", help="برای تبدیل صدای خود به متن، روی این دکمه کلیک کنید"):
+            recognizer = sr.Recognizer()
+            with sr.Microphone() as source:
+                st.write("در حال ضبط... لطفاً صحبت کنید.")
+                audio = recognizer.listen(source)
+                try:
+                    user_message = recognizer.recognize_google(audio, language="fa-IR")
+                    st.session_state.last_voice_input = user_message  # ذخیره متن تبدیل شده در session_state
+                    st.write(f"متن شما: {user_message}")
 
-        // Stop recording
-        function stopRecording() {
-            mediaRecorder.stop();
-        }
-        </script>
-        <button onclick="startRecording()">شروع ضبط</button>
-        <button onclick="stopRecording()">پایان ضبط</button>
-        """, unsafe_allow_html=True)
+                    # ارسال پیام به طور خودکار
+                    if user_message.strip():
+                        # ذخیره پیام کاربر در تاریخچه
+                        st.session_state.chat_history.append(f"شما: {user_message}")
 
-        # ارسال پیام
-        if st.button("ارسال پیام"):
-            if user_message.strip():
-                # ذخیره پیام کاربر در تاریخچه
-                st.session_state.chat_history.append(f"شما: {user_message}")
+                        # دریافت پاسخ از هوش مصنوعی
+                        response = send_message(user_message, df)
+                        st.session_state.chat_history.append(f"ربات: {response}")
 
-                # دریافت پاسخ از هوش مصنوعی
-                response = send_message(user_message, df)
-                st.session_state.chat_history.append(f"ربات: {response}")
+                        # نمایش تاریخچه گفتگوها
+                        with st.expander("تاریخچه گفتگوها"):
+                            for message in st.session_state.chat_history:
+                                st.markdown(f'<div class="chat-message">{message}</div>', unsafe_allow_html=True)
 
-                # نمایش تاریخچه گفتگوها
-                with st.expander("تاریخچه گفتگوها"):
-                    for message in st.session_state.chat_history:
-                        st.markdown(f'<div class="chat-message">{message}</div>', unsafe_allow_html=True)
-
-                # اعمال تغییرات در داده‌ها (در اینجا یک ستون جدید اضافه می‌شود)
-                df['new_column'] = 'تغییر جدید'
-
-                # نمایش دکمه برای دانلود فایل تغییر یافته
-                # این بخش از کد حذف شد
-
-                # پاک کردن ورودی پیام
-                st.session_state.user_input = ""  # این متغیر دیگر تغییر نخواهد کرد، حذف شد
-
-            else:
-                st.warning("لطفاً یک پیام وارد کنید!")
+                except sr.UnknownValueError:
+                    st.error("متاسفانه نمی‌توانم صدای شما را بشنوم.")
+                except sr.RequestError:
+                    st.error("خطا در اتصال به سرویس تبدیل صدا به متن.")
 
         # نمایش هشدار درباره حذف تاریخچه پس از 24 ساعت
         st.markdown('<p class="warning-text">توجه: تاریخچه گفتگوها پس از 24 ساعت پاک خواهد شد.</p>', unsafe_allow_html=True)
