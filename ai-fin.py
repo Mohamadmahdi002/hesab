@@ -131,6 +131,43 @@ if uploaded_file is not None:
         # ورودی پیام
         user_message = st.text_input("پیام خود را وارد کنید:", value=st.session_state.get('last_voice_input', ''))  # قرار دادن ورودی پیشفرض
 
+        # کد ضبط صدا با استفاده از HTML و JS
+        st.markdown("""
+        <script>
+        let audioStream;
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioUrl;
+        
+        // Start recording
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({audio: true})
+            .then(stream => {
+                audioStream = stream;
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = function(event) {
+                    audioChunks.push(event.data);
+                };
+                mediaRecorder.onstop = function() {
+                    let audioBlob = new Blob(audioChunks, {type: 'audio/wav'});
+                    audioUrl = URL.createObjectURL(audioBlob);
+                    let audio = new Audio(audioUrl);
+                    audio.play();
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                mediaRecorder.start();
+            });
+        }
+
+        // Stop recording
+        function stopRecording() {
+            mediaRecorder.stop();
+        }
+        </script>
+        <button onclick="startRecording()">شروع ضبط</button>
+        <button onclick="stopRecording()">پایان ضبط</button>
+        """, unsafe_allow_html=True)
+
         # ارسال پیام
         if st.button("ارسال پیام"):
             if user_message.strip():
