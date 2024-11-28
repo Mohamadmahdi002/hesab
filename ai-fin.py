@@ -4,6 +4,7 @@ import streamlit as st
 from io import StringIO
 from datetime import datetime, timedelta
 import speech_recognition as sr
+from streamlit_audio_recorder import st_audiorec  # پکیج برای ضبط صدا در مرورگر
 
 # URL و توکن API
 url = 'https://api.one-api.ir/chatbot/v1/gpt3.5-turbo/'
@@ -134,18 +135,27 @@ if uploaded_file is not None:
 
         # دکمه ضبط صدا
         if st.button("ضبط صدا"):
-            recognizer = sr.Recognizer()
-            with sr.Microphone() as source:
-                st.write("در حال ضبط... لطفاً صحبت کنید.")
-                audio = recognizer.listen(source)
-                try:
-                    user_message = recognizer.recognize_google(audio, language="fa-IR")
-                    st.session_state.last_voice_input = user_message  # ذخیره متن تبدیل شده در session_state
-                    st.write(f"متن شما: {user_message}")
-                except sr.UnknownValueError:
-                    st.error("متاسفانه نمی‌توانم صدای شما را بشنوم.")
-                except sr.RequestError:
-                    st.error("خطا در اتصال به سرویس تبدیل صدا به متن.")
+            # اگر در محیط محلی باشید، از speech_recognition استفاده کنید
+            try:
+                # از پکیج `streamlit_audio_recorder` استفاده کنیم
+                audio_data = st_audiorec()
+
+                if audio_data:
+                    # پردازش صدای ضبط‌شده و تبدیل آن به متن
+                    recognizer = sr.Recognizer()
+                    audio = sr.AudioFile(audio_data)
+                    with audio as source:
+                        audio_data = recognizer.record(source)
+                        try:
+                            user_message = recognizer.recognize_google(audio_data, language="fa-IR")
+                            st.session_state.last_voice_input = user_message  # ذخیره متن تبدیل شده در session_state
+                            st.write(f"متن شما: {user_message}")
+                        except sr.UnknownValueError:
+                            st.error("متاسفانه نمی‌توانم صدای شما را بشنوم.")
+                        except sr.RequestError:
+                            st.error("خطا در اتصال به سرویس تبدیل صدا به متن.")
+            except Exception as e:
+                st.error(f"خطا در ضبط صدا: {e}")
 
         # ارسال پیام
         if st.button("ارسال پیام"):
